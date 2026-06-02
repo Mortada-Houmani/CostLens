@@ -1,4 +1,6 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { clearAccessToken } from '../auth/accessToken'
+import { isDemoMode } from '../demo/mockData'
 
 const links = [
   { to: '/', label: 'Dashboard' },
@@ -8,6 +10,13 @@ const links = [
 ]
 
 export function Navbar() {
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    clearAccessToken()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <>
       <header className="fixed left-0 top-0 z-50 flex h-16 w-full items-center justify-between border-b border-white/10 bg-[#10131a] px-4 md:px-6">
@@ -26,6 +35,15 @@ export function Navbar() {
           <button className="rounded border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#bacac6] hover:border-[#46eedd]/50 hover:text-[#46eedd]">
             Support
           </button>
+          {!isDemoMode ? (
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="rounded border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#bacac6] hover:border-[#46eedd]/50 hover:text-[#46eedd]"
+            >
+              Lock
+            </button>
+          ) : null}
         </div>
       </header>
 

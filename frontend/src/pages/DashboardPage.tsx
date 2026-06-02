@@ -59,6 +59,23 @@ interface DashboardSummary {
   latestFindings: LatestFinding[]
 }
 
+interface AnalyticsResource {
+  id: string
+  name: string
+  service: Service
+}
+
+interface AnalyticsResponse {
+  range: AnalyticsRange
+  points: TelemetryPoint[]
+  source: {
+    cost: string
+    metrics: string
+  }
+}
+
+type AnalyticsRange = 'weekly' | 'monthly'
+
 const emptySummary: DashboardSummary = {
   totalFindings: 0,
   highSeverity: 0,
@@ -89,17 +106,24 @@ export function DashboardPage() {
   const [error, setError] = useState<string | null>(null)
   const [analyticsService, setAnalyticsService] = useState<Service>('EC2')
   const [analyticsResource, setAnalyticsResource] = useState('')
+  const [analyticsRange, setAnalyticsRange] = useState<AnalyticsRange>('weekly')
+  const [liveAnalyticsResources, setLiveAnalyticsResources] = useState<
+    AnalyticsResource[]
+  >([])
+  const [liveAnalyticsSeries, setLiveAnalyticsSeries] = useState<
+    TelemetryPoint[]
+  >([])
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null)
+  const [isAnalyticsLoading, setIsAnalyticsLoading] = useState(!isDemoMode)
 
-  const analyticsResources = getAnalyticsResources(
-    summary.latestFindings,
-    analyticsService,
-  )
+  const analyticsResources = isDemoMode
+    ? getAnalyticsResources(summary.latestFindings, analyticsService)
+    : liveAnalyticsResources
   const selectedAnalyticsResource =
     analyticsResource || analyticsResources[0]?.id || ''
-  const analyticsSeries = buildTelemetrySeries(
-    analyticsService,
-    selectedAnalyticsResource,
-  )
+  const analyticsSeries = isDemoMode
+    ? buildTelemetrySeries(analyticsService, selectedAnalyticsResource)
+    : liveAnalyticsSeries
 
   useEffect(() => {
     if (isDemoMode) {
@@ -124,6 +148,68 @@ export function DashboardPage() {
   useEffect(() => {
     setAnalyticsResource('')
   }, [analyticsService])
+
+  useEffect(() => {
+    if (isDemoMode) {
+      return
+    }
+
+    async function loadResources() {
+      setAnalyticsError(null)
+      setIsAnalyticsLoading(true)
+
+      try {
+        const response = await apiClient.get<AnalyticsResource[]>(
+          '/analytics/resources',
+          {
+            params: { service: analyticsService },
+          },
+        )
+        setLiveAnalyticsResources(response.data)
+        setAnalyticsResource(response.data[0]?.id ?? '')
+      } catch (loadError) {
+        setLiveAnalyticsResources([])
+        setLiveAnalyticsSeries([])
+        setAnalyticsError(getApiErrorMessage(loadError))
+      } finally {
+        setIsAnalyticsLoading(false)
+      }
+    }
+
+    void loadResources()
+  }, [analyticsService])
+
+  useEffect(() => {
+    if (isDemoMode || !selectedAnalyticsResource) {
+      return
+    }
+
+    async function loadMetrics() {
+      setAnalyticsError(null)
+      setIsAnalyticsLoading(true)
+
+      try {
+        const response = await apiClient.get<AnalyticsResponse>(
+          '/analytics/metrics',
+          {
+            params: {
+              service: analyticsService,
+              resourceId: selectedAnalyticsResource,
+              range: analyticsRange,
+            },
+          },
+        )
+        setLiveAnalyticsSeries(response.data.points)
+      } catch (loadError) {
+        setLiveAnalyticsSeries([])
+        setAnalyticsError(getApiErrorMessage(loadError))
+      } finally {
+        setIsAnalyticsLoading(false)
+      }
+    }
+
+    void loadMetrics()
+  }, [analyticsRange, analyticsService, selectedAnalyticsResource])
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6 p-4 md:p-6">
@@ -265,15 +351,36 @@ export function DashboardPage() {
                 Service telemetry
               </h2>
               <p className="mt-1 text-sm text-[#859491]">
-                Sample operational charts for the selected resource.
+                Real CloudWatch metrics for the selected resource.
               </p>
             </div>
             <div className="flex flex-col gap-2 sm:flex-row">
+              <div className="inline-flex h-10 overflow-hidden rounded border border-white/10 bg-[#0b0e14]">
+                {(['weekly', 'monthly'] as AnalyticsRange[]).map((range) => (
+                  <button
+                    key={range}
+                    type="button"
+                    onClick={() => setAnalyticsRange(range)}
+                    className={[
+                      'px-3 text-xs font-bold uppercase tracking-[0.12em] transition',
+                      analyticsRange === range
+                        ? 'bg-[#00d1c1]/15 text-[#46eedd]'
+                        : 'text-[#859491] hover:text-[#e1e2eb]',
+                    ].join(' ')}
+                  >
+                    {range}
+                  </button>
+                ))}
+              </div>
               <select
                 value={selectedAnalyticsResource}
                 onChange={(event) => setAnalyticsResource(event.target.value)}
+                disabled={analyticsResources.length === 0}
                 className="h-10 rounded border border-white/10 bg-[#0b0e14] px-3 font-mono text-xs text-[#e1e2eb] outline-none focus:border-[#46eedd] focus:ring-2 focus:ring-[#46eedd]/20 sm:min-w-80"
               >
+                {analyticsResources.length === 0 ? (
+                  <option value="">No resources in latest scan</option>
+                ) : null}
                 {analyticsResources.map((resource) => (
                   <option key={resource.id} value={resource.id}>
                     {resource.name}
@@ -306,14 +413,21 @@ export function DashboardPage() {
           </div>
         </div>
 
+        {analyticsError ? (
+          <div className="mx-4 mt-4 rounded border border-[#ffb4ab]/30 bg-[#93000a]/30 px-4 py-3 text-sm text-[#ffdad6]">
+            {analyticsError}
+          </div>
+        ) : null}
+
         <div className="grid gap-4 p-4 lg:grid-cols-2">
           <TelemetryChart
-            title="Monthly Cost"
+            title={analyticsRange === 'weekly' ? 'Weekly Cost' : 'Monthly Cost'}
             unit="$"
             dataKey="cost"
             data={analyticsSeries}
             color="#46eedd"
             chartType="area"
+            loading={isAnalyticsLoading}
           />
           <TelemetryChart
             title="CPU Utilization"
@@ -322,6 +436,7 @@ export function DashboardPage() {
             data={analyticsSeries}
             color="#ffd166"
             chartType="line"
+            loading={isAnalyticsLoading}
           />
           <TelemetryChart
             title="Memory Utilization"
@@ -330,6 +445,7 @@ export function DashboardPage() {
             data={analyticsSeries}
             color="#c7a7ff"
             chartType="line"
+            loading={isAnalyticsLoading}
           />
           <TelemetryChart
             title={analyticsService === 'S3' || analyticsService === 'EBS' ? 'Storage Activity' : 'Network Throughput'}
@@ -338,6 +454,7 @@ export function DashboardPage() {
             data={analyticsSeries}
             color="#8fb7ff"
             chartType="area"
+            loading={isAnalyticsLoading}
           />
         </div>
       </section>
@@ -548,6 +665,7 @@ function TelemetryChart({
   data,
   color,
   chartType,
+  loading,
 }: {
   title: string
   unit: string
@@ -555,7 +673,12 @@ function TelemetryChart({
   data: TelemetryPoint[]
   color: string
   chartType: 'line' | 'area'
+  loading: boolean
 }) {
+  const latestValue = [...data]
+    .reverse()
+    .find((point) => point[dataKey] !== null)?.[dataKey]
+
   return (
     <div className="rounded border border-white/10 bg-[#1d2026] p-4">
       <div className="mb-4 flex items-center justify-between gap-4">
@@ -563,10 +686,17 @@ function TelemetryChart({
           {title}
         </h3>
         <span className="font-mono text-xs text-[#46eedd]">
-          {formatTelemetryValue(data.at(-1)?.[dataKey] ?? 0, unit)}
+          {loading ? 'Loading' : formatTelemetryValue(latestValue, unit)}
         </span>
       </div>
       <div className="h-52">
+        {loading ? (
+          <div className="h-full animate-pulse rounded border border-white/5 bg-white/[0.04]" />
+        ) : data.length === 0 ? (
+          <div className="flex h-full items-center justify-center rounded border border-white/5 bg-[#0b0e14] px-4 text-center text-sm text-[#859491]">
+            No CloudWatch datapoints found for this metric.
+          </div>
+        ) : (
         <ResponsiveContainer width="100%" height="100%">
           {chartType === 'area' ? (
             <AreaChart data={data} margin={{ left: -24, right: 8, top: 8, bottom: 0 }}>
@@ -616,6 +746,7 @@ function TelemetryChart({
             </LineChart>
           )}
         </ResponsiveContainer>
+        )}
       </div>
     </div>
   )
@@ -632,10 +763,10 @@ interface AnalyticsResource {
 
 interface TelemetryPoint {
   label: string
-  cost: number
-  cpu: number
-  memory: number
-  network: number
+  cost: number | null
+  cpu: number | null
+  memory: number | null
+  network: number | null
 }
 
 function getAnalyticsResources(
@@ -647,6 +778,7 @@ function getAnalyticsResources(
     .map((finding) => ({
       id: finding.resourceId,
       name: finding.resourceName ?? finding.resourceId,
+      service,
     }))
 
   if (resources.length > 0) {
@@ -657,10 +789,12 @@ function getAnalyticsResources(
     {
       id: `${service.toLowerCase()}-demo-primary`,
       name: `${serviceLabels[service]} demo primary`,
+      service,
     },
     {
       id: `${service.toLowerCase()}-demo-secondary`,
       name: `${serviceLabels[service]} demo secondary`,
+      service,
     },
   ]
 }
@@ -718,7 +852,11 @@ function roundMetric(value: number) {
   return Math.round(value * 10) / 10
 }
 
-function formatTelemetryValue(value: number, unit: string) {
+function formatTelemetryValue(value: number | null | undefined, unit: string) {
+  if (value === null || value === undefined) {
+    return 'No data'
+  }
+
   return unit === '$' ? formatCurrency(value) : `${value}${unit}`
 }
 

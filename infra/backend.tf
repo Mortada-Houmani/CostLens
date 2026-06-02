@@ -145,6 +145,10 @@ resource "aws_ecs_task_definition" "backend" {
           value = var.encryption_key
         },
         {
+          name  = "APP_ACCESS_TOKEN"
+          value = var.app_access_token
+        },
+        {
           name  = "REDIS_HOST"
           value = local.ecs_redis_host
         },

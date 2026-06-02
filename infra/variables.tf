@@ -88,6 +88,12 @@ variable "encryption_key" {
   sensitive   = true
 }
 
+variable "app_access_token" {
+  description = "Shared access token required by the backend API."
+  type        = string
+  sensitive   = true
+}
+
 # Redis
 variable "redis_host" {
   description = "Redis host used by the backend when enable_elasticache is false."
