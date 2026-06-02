@@ -69,8 +69,8 @@ export class DashboardService {
     private readonly scansRepository: Repository<Scan>,
   ) {}
 
-  async getSummary(): Promise<DashboardSummaryResponse> {
-    const latestScanEntity = await this.getLatestScanEntity();
+  async getSummary(userId: string): Promise<DashboardSummaryResponse> {
+    const latestScanEntity = await this.getLatestScanEntity(userId);
     const latestScan = latestScanEntity
       ? this.toLatestScanResponse(latestScanEntity)
       : null;
@@ -93,9 +93,9 @@ export class DashboardService {
       this.countFindingsForScan(latestScanEntity?.id, FindingSeverity.Low),
       this.getEstimatedMonthlyWaste(latestScanEntity?.id),
       this.getFindingsByService(latestScanEntity?.id),
-      this.scansRepository.count(),
-      this.scansRepository.count({ where: { status: ScanStatus.Failed } }),
-      this.scansRepository.count({ where: { status: ScanStatus.Success } }),
+      this.countScans(userId),
+      this.countScans(userId, ScanStatus.Failed),
+      this.countScans(userId, ScanStatus.Success),
       this.getLatestFindings(latestScanEntity?.id),
     ]);
 
@@ -146,15 +146,6 @@ export class DashboardService {
   private async getFindingsByService(
     scanId?: string,
   ): Promise<Record<FindingService, number>> {
-    const query = scanId
-      ? this.createFindingsForScanQuery(scanId)
-      : this.findingsRepository.createQueryBuilder('finding');
-    const rows = await query
-      .select('finding.service', 'service')
-      .addSelect('COUNT(finding.id)', 'count')
-      .groupBy('finding.service')
-      .getRawMany<FindingsByServiceResult>();
-
     const findingsByService: Record<FindingService, number> = {
       [FindingService.EC2]: 0,
       [FindingService.EBS]: 0,
@@ -163,6 +154,17 @@ export class DashboardService {
       [FindingService.ECS]: 0,
     };
 
+    if (!scanId) {
+      return findingsByService;
+    }
+
+    const query = this.createFindingsForScanQuery(scanId);
+    const rows = await query
+      .select('finding.service', 'service')
+      .addSelect('COUNT(finding.id)', 'count')
+      .groupBy('finding.service')
+      .getRawMany<FindingsByServiceResult>();
+
     for (const row of rows) {
       findingsByService[row.service] = Number(row.count);
     }
@@ -170,11 +172,31 @@ export class DashboardService {
     return findingsByService;
   }
 
-  private async getLatestScanEntity(): Promise<Scan | null> {
-    return this.scansRepository.findOne({
-      where: {},
-      order: { createdAt: 'DESC' },
-    });
+  private async getLatestScanEntity(userId: string): Promise<Scan | null> {
+    return this.scansRepository
+      .createQueryBuilder('scan')
+      .innerJoin('scan.awsAccount', 'awsAccount')
+      .innerJoin('awsAccount.user', 'user')
+      .where('user.id = :userId', { userId })
+      .orderBy('scan.createdAt', 'DESC')
+      .getOne();
+  }
+
+  private async countScans(
+    userId: string,
+    status?: ScanStatus,
+  ): Promise<number> {
+    const query = this.scansRepository
+      .createQueryBuilder('scan')
+      .innerJoin('scan.awsAccount', 'awsAccount')
+      .innerJoin('awsAccount.user', 'user')
+      .where('user.id = :userId', { userId });
+
+    if (status) {
+      query.andWhere('scan.status = :status', { status });
+    }
+
+    return query.getCount();
   }
 
   private toLatestScanResponse(scan: Scan): LatestScanResponse {

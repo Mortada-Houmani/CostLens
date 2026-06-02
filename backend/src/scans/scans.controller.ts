@@ -7,6 +7,8 @@ import {
   UseGuards,
 } from '@nestjs/common';
 import { Throttle, ThrottlerGuard } from '@nestjs/throttler';
+import type { AuthUser } from '../auth/auth-user';
+import { CurrentUser } from '../auth/current-user.decorator';
 import { ScanResponse, ScansService } from './scans.service';
 
 @Controller('scans')
@@ -17,18 +19,22 @@ export class ScansController {
   @UseGuards(ThrottlerGuard)
   @Throttle({ default: { limit: 3, ttl: 60_000 } })
   start(
+    @CurrentUser() user: AuthUser,
     @Param('awsAccountId', ParseUUIDPipe) awsAccountId: string,
   ): Promise<ScanResponse> {
-    return this.scansService.start(awsAccountId);
+    return this.scansService.start(user.id, awsAccountId);
   }
 
   @Get()
-  findAll(): Promise<ScanResponse[]> {
-    return this.scansService.findAll();
+  findAll(@CurrentUser() user: AuthUser): Promise<ScanResponse[]> {
+    return this.scansService.findAll(user.id);
   }
 
   @Get(':id')
-  findOne(@Param('id', ParseUUIDPipe) id: string): Promise<ScanResponse> {
-    return this.scansService.findOne(id);
+  findOne(
+    @CurrentUser() user: AuthUser,
+    @Param('id', ParseUUIDPipe) id: string,
+  ): Promise<ScanResponse> {
+    return this.scansService.findOne(user.id, id);
   }
 }

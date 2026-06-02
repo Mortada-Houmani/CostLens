@@ -59,7 +59,7 @@ jobs:
           container-name: costlens-backend
           image: ${{ steps.build-image.outputs.image }}
           environment-variables: |
-            APP_ACCESS_TOKEN=${{ secrets.APP_ACCESS_TOKEN }}
+            JWT_SECRET=${{ secrets.JWT_SECRET }}
 
       - name: Deploy ECS task definition
         uses: aws-actions/amazon-ecs-deploy-task-definition@v2

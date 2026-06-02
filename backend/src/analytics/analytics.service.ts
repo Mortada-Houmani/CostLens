@@ -47,8 +47,11 @@ export class AnalyticsService {
     private readonly encryptionService: EncryptionService,
   ) {}
 
-  async getResources(service: FindingService): Promise<AnalyticsResource[]> {
-    const latestScan = await this.getLatestScan();
+  async getResources(
+    userId: string,
+    service: FindingService,
+  ): Promise<AnalyticsResource[]> {
+    const latestScan = await this.getLatestScan(userId);
 
     if (!latestScan) {
       return [];
@@ -78,11 +81,12 @@ export class AnalyticsService {
   }
 
   async getMetrics(
+    userId: string,
     service: FindingService,
     resourceId: string,
     range: AnalyticsRange,
   ) {
-    const latestScan = await this.getLatestScanWithAccount();
+    const latestScan = await this.getLatestScanWithAccount(userId);
 
     if (!latestScan?.awsAccount) {
       throw new NotFoundException('Run a scan before requesting analytics.');
@@ -437,18 +441,23 @@ export class AnalyticsService {
     );
   }
 
-  private async getLatestScan(): Promise<Scan | null> {
-    return this.scansRepository.findOne({
-      where: {},
-      order: { createdAt: 'DESC' },
-    });
+  private async getLatestScan(userId: string): Promise<Scan | null> {
+    return this.scansRepository
+      .createQueryBuilder('scan')
+      .innerJoin('scan.awsAccount', 'awsAccount')
+      .innerJoin('awsAccount.user', 'user')
+      .where('user.id = :userId', { userId })
+      .orderBy('scan.createdAt', 'DESC')
+      .getOne();
   }
 
-  private async getLatestScanWithAccount(): Promise<Scan | null> {
+  private async getLatestScanWithAccount(userId: string): Promise<Scan | null> {
     return this.scansRepository
       .createQueryBuilder('scan')
       .leftJoinAndSelect('scan.awsAccount', 'awsAccount')
+      .innerJoin('awsAccount.user', 'user')
       .addSelect('awsAccount.secretAccessKey')
+      .where('user.id = :userId', { userId })
       .orderBy('scan.createdAt', 'DESC')
       .getOne();
   }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { apiClient, getApiErrorMessage } from '../api/client';
 import { isDemoMode } from '../demo/mockData';
 import { hasAccessToken, setAccessToken } from '../auth/accessToken';
 
@@ -10,9 +11,20 @@ type LocationState = {
   };
 };
 
+interface AuthResponse {
+  accessToken: string;
+  user: {
+    id: string;
+    email: string;
+  };
+}
+
 export function LoginPage() {
-  const [token, setToken] = useState('');
+  const [mode, setMode] = useState<'login' | 'register'>('login');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
   const state = location.state as LocationState | null;
@@ -22,18 +34,37 @@ export function LoginPage() {
     return <Navigate to="/" replace />;
   }
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    const trimmedToken = token.trim();
+    setIsSubmitting(true);
+    setError('');
 
-    if (!trimmedToken) {
-      setError('Enter the CostLens access token.');
+    try {
+      const response = await apiClient.post<AuthResponse>(
+        mode === 'login' ? '/auth/login' : '/auth/register',
+        {
+          email,
+          password,
+        },
+      );
+
+      setAccessToken(response.data.accessToken, response.data.user.email);
+      navigate(destination, { replace: true });
+    } catch (authError) {
+      setError(getApiErrorMessage(authError));
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  function switchMode(nextMode: 'login' | 'register') {
+    if (isSubmitting) {
       return;
     }
 
-    setAccessToken(trimmedToken);
-    navigate(destination, { replace: true });
+    setMode(nextMode);
+    setError('');
   }
 
   return (
@@ -44,28 +75,77 @@ export function LoginPage() {
             CostLens
           </p>
           <h1 className="mt-3 text-2xl font-bold tracking-tight">
-            Unlock dashboard
+            {mode === 'login' ? 'Sign in' : 'Create account'}
           </h1>
           <p className="mt-2 text-sm leading-6 text-[#859491]">
-            This deployment is protected with a shared access token.
+            Each CostLens user manages their own AWS accounts and scan data.
           </p>
+        </div>
+
+        <div className="mb-5 grid grid-cols-2 rounded border border-white/10 bg-[#0b0e14] p-1">
+          <button
+            type="button"
+            onClick={() => switchMode('login')}
+            className={[
+              'rounded px-3 py-2 text-sm font-semibold transition',
+              mode === 'login'
+                ? 'bg-[#00d1c1] text-[#003732]'
+                : 'text-[#859491] hover:text-[#e1e2eb]',
+            ].join(' ')}
+          >
+            Login
+          </button>
+          <button
+            type="button"
+            onClick={() => switchMode('register')}
+            className={[
+              'rounded px-3 py-2 text-sm font-semibold transition',
+              mode === 'register'
+                ? 'bg-[#00d1c1] text-[#003732]'
+                : 'text-[#859491] hover:text-[#e1e2eb]',
+            ].join(' ')}
+          >
+            Register
+          </button>
         </div>
 
         <form className="space-y-4" onSubmit={handleSubmit}>
           <label className="block">
             <span className="text-sm font-semibold text-[#bacac6]">
-              Access token
+              Email
             </span>
             <input
-              type="password"
-              value={token}
+              type="email"
+              value={email}
               onChange={(event) => {
-                setToken(event.target.value);
+                setEmail(event.target.value);
                 setError('');
               }}
               className="mt-2 w-full rounded border border-white/10 bg-[#0b0e14] px-3 py-3 text-sm text-[#e1e2eb] outline-none transition placeholder:text-[#596562] focus:border-[#46eedd]"
-              placeholder="Enter token"
-              autoComplete="current-password"
+              placeholder="you@example.com"
+              autoComplete="email"
+              required
+            />
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-semibold text-[#bacac6]">
+              Password
+            </span>
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setError('');
+              }}
+              className="mt-2 w-full rounded border border-white/10 bg-[#0b0e14] px-3 py-3 text-sm text-[#e1e2eb] outline-none transition placeholder:text-[#596562] focus:border-[#46eedd]"
+              placeholder="Minimum 8 characters"
+              autoComplete={
+                mode === 'login' ? 'current-password' : 'new-password'
+              }
+              minLength={8}
+              required
             />
           </label>
 
@@ -77,9 +157,14 @@ export function LoginPage() {
 
           <button
             type="submit"
+            disabled={isSubmitting}
             className="w-full rounded bg-[#00d1c1] px-4 py-3 text-sm font-bold uppercase tracking-[0.12em] text-[#003732] shadow-[0_0_18px_rgba(0,209,193,0.18)] transition hover:bg-[#46eedd]"
           >
-            Continue
+            {isSubmitting
+              ? 'Working'
+              : mode === 'login'
+                ? 'Sign in'
+                : 'Create account'}
           </button>
         </form>
       </section>

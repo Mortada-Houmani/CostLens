@@ -20,7 +20,7 @@ Create a root `.env` file:
 ```env
 DATABASE_URL=postgresql://USER:PASSWORD@HOST.neon.tech/DBNAME?sslmode=require&channel_binding=require
 ENCRYPTION_KEY=replace-with-a-long-random-secret
-APP_ACCESS_TOKEN=replace-with-a-long-random-access-token
+JWT_SECRET=replace-with-a-long-random-jwt-secret
 VITE_API_URL=http://localhost:3000/api
 VITE_DEMO_MODE=false
 ```
@@ -47,7 +47,7 @@ PostgreSQL is intentionally not included because CostLens uses Neon from the sta
 
 ## Security Notes
 
-CostLens requires a shared `APP_ACCESS_TOKEN` for API access, encrypts stored AWS secret access keys using `ENCRYPTION_KEY`, and never returns `secretAccessKey` from API responses. For production, prefer real authentication plus AWS IAM Role ARN and STS AssumeRole instead of storing access keys.
+CostLens uses email/password accounts with JWT sessions, encrypts stored AWS secret access keys using `ENCRYPTION_KEY`, and never returns `secretAccessKey` from API responses. For production, prefer AWS IAM Role ARN and STS AssumeRole instead of storing access keys.
 
 Generate a strong token before deploying:
 
@@ -55,11 +55,11 @@ Generate a strong token before deploying:
 openssl rand -hex 32
 ```
 
-Use that value for `APP_ACCESS_TOKEN` in local `.env`, GitHub Secrets, and Terraform `app_access_token`. The deployed frontend asks for this token before showing CostLens, and the backend rejects API requests that do not send it.
+Use a strong random value for `JWT_SECRET` in local `.env`, GitHub Secrets, and Terraform `jwt_secret`. The deployed frontend requires each user to register or log in before showing CostLens, and the backend scopes API data to the authenticated user.
 
 ## Limitations
 
-- The current access control is a single shared token, not per-user authentication or authorization.
+- Authentication is implemented with local email/password accounts and JWT sessions; production deployments should add password reset, email verification, and stronger account controls.
 - AWS scanning currently covers a focused set of EC2, EBS, S3, and RDS checks.
 - Fix commands are suggestions only and are never executed automatically.
 - Demo mode uses mocked frontend data and does not represent a real AWS account.
@@ -154,7 +154,7 @@ ECR_BACKEND_REPOSITORY
 ECS_CLUSTER
 ECS_SERVICE
 ECS_TASK_DEFINITION
-APP_ACCESS_TOKEN
+JWT_SECRET
 ```
 
 The ECS task definition must include a container named `costlens-backend`. The backend container listens on port `3000`.

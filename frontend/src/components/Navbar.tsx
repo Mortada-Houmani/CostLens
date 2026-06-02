@@ -1,5 +1,5 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { clearAccessToken } from '../auth/accessToken'
+import { clearAccessToken, getUserEmail } from '../auth/accessToken'
 import { isDemoMode } from '../demo/mockData'
 
 const links = [
@@ -11,6 +11,7 @@ const links = [
 
 export function Navbar() {
   const navigate = useNavigate()
+  const userEmail = getUserEmail()
 
   function handleLogout() {
     clearAccessToken()
@@ -30,7 +31,7 @@ export function Navbar() {
         </div>
         <div className="flex items-center gap-3">
           <div className="hidden h-9 items-center rounded border border-white/10 bg-[#0b0e14] px-3 text-sm text-[#859491] md:flex md:w-64">
-            Search resources
+            {userEmail || 'CostLens workspace'}
           </div>
           <button className="rounded border border-white/10 px-3 py-2 text-xs font-semibold uppercase tracking-[0.12em] text-[#bacac6] hover:border-[#46eedd]/50 hover:text-[#46eedd]">
             Support

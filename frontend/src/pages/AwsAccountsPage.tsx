@@ -22,7 +22,6 @@ interface ScanStartResponse {
 }
 
 const initialForm = {
-  email: '',
   accountName: '',
   accessKeyId: '',
   secretAccessKey: '',
@@ -158,14 +157,6 @@ export function AwsAccountsPage() {
               </div>
 
               <form onSubmit={handleSubmit} className="space-y-4">
-                <TextInput
-                  label="Email"
-                  type="email"
-                  value={form.email}
-                  onChange={(email) =>
-                    setForm((current) => ({ ...current, email }))
-                  }
-                />
                 <TextInput
                   label="Account Name"
                   value={form.accountName}

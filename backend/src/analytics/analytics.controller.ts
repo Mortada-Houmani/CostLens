@@ -1,4 +1,6 @@
 import { Controller, Get, Query } from '@nestjs/common';
+import type { AuthUser } from '../auth/auth-user';
+import { CurrentUser } from '../auth/current-user.decorator';
 import {
   AnalyticsMetricsQueryDto,
   AnalyticsResourcesQueryDto,
@@ -10,13 +12,20 @@ export class AnalyticsController {
   constructor(private readonly analyticsService: AnalyticsService) {}
 
   @Get('resources')
-  getResources(@Query() query: AnalyticsResourcesQueryDto) {
-    return this.analyticsService.getResources(query.service);
+  getResources(
+    @CurrentUser() user: AuthUser,
+    @Query() query: AnalyticsResourcesQueryDto,
+  ) {
+    return this.analyticsService.getResources(user.id, query.service);
   }
 
   @Get('metrics')
-  getMetrics(@Query() query: AnalyticsMetricsQueryDto) {
+  getMetrics(
+    @CurrentUser() user: AuthUser,
+    @Query() query: AnalyticsMetricsQueryDto,
+  ) {
     return this.analyticsService.getMetrics(
+      user.id,
       query.service,
       query.resourceId,
       query.range ?? 'weekly',

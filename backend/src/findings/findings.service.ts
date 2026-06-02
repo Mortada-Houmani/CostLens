@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { FindOptionsWhere, Repository } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Scan, ScanStatus } from '../scans/scan.entity';
 import { FindFindingsQueryDto } from './dto/find-findings-query.dto';
 import {
@@ -38,46 +38,62 @@ export class FindingsService {
     private readonly scansRepository: Repository<Scan>,
   ) {}
 
-  async findAll(query: FindFindingsQueryDto): Promise<FindingResponse[]> {
-    const where: FindOptionsWhere<ResourceFinding> = {};
-    const scanId = query.scanId ?? (await this.getLatestScanId());
+  async findAll(
+    userId: string,
+    query: FindFindingsQueryDto,
+  ): Promise<FindingResponse[]> {
+    const scanId = query.scanId ?? (await this.getLatestScanId(userId));
+    const findingsQuery = this.findingsRepository
+      .createQueryBuilder('finding')
+      .innerJoinAndSelect('finding.scan', 'scan')
+      .innerJoin('scan.awsAccount', 'awsAccount')
+      .innerJoin('awsAccount.user', 'user')
+      .where('user.id = :userId', { userId })
+      .orderBy('finding.createdAt', 'DESC');
 
     if (scanId) {
-      where.scan = { id: scanId };
+      findingsQuery.andWhere('scan.id = :scanId', { scanId });
     }
 
     if (query.service) {
-      where.service = query.service;
+      findingsQuery.andWhere('finding.service = :service', {
+        service: query.service,
+      });
     }
 
     if (query.severity) {
-      where.severity = query.severity;
+      findingsQuery.andWhere('finding.severity = :severity', {
+        severity: query.severity,
+      });
     }
 
-    const findings = await this.findingsRepository.find({
-      where,
-      relations: { scan: true },
-      order: { createdAt: 'DESC' },
-    });
+    const findings = await findingsQuery.getMany();
 
     return findings.map((finding) => this.toResponse(finding));
   }
 
-  private async getLatestScanId(): Promise<string | undefined> {
-    const scan = await this.scansRepository.findOne({
-      where: {},
-      order: { createdAt: 'DESC' },
-      select: { id: true },
-    });
+  private async getLatestScanId(userId: string): Promise<string | undefined> {
+    const scan = await this.scansRepository
+      .createQueryBuilder('scan')
+      .innerJoin('scan.awsAccount', 'awsAccount')
+      .innerJoin('awsAccount.user', 'user')
+      .where('user.id = :userId', { userId })
+      .orderBy('scan.createdAt', 'DESC')
+      .select('scan.id')
+      .getOne();
 
     return scan?.id;
   }
 
-  async findOne(id: string): Promise<FindingResponse> {
-    const finding = await this.findingsRepository.findOne({
-      where: { id },
-      relations: { scan: true },
-    });
+  async findOne(userId: string, id: string): Promise<FindingResponse> {
+    const finding = await this.findingsRepository
+      .createQueryBuilder('finding')
+      .innerJoinAndSelect('finding.scan', 'scan')
+      .innerJoin('scan.awsAccount', 'awsAccount')
+      .innerJoin('awsAccount.user', 'user')
+      .where('finding.id = :id', { id })
+      .andWhere('user.id = :userId', { userId })
+      .getOne();
 
     if (!finding) {
       throw new NotFoundException(

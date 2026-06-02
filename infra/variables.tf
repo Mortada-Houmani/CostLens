@@ -88,8 +88,8 @@ variable "encryption_key" {
   sensitive   = true
 }
 
-variable "app_access_token" {
-  description = "Shared access token required by the backend API."
+variable "jwt_secret" {
+  description = "Secret used by the backend to sign JWT sessions."
   type        = string
   sensitive   = true
 }

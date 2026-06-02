@@ -14,7 +14,7 @@ services:
     environment:
       DATABASE_URL: ${DATABASE_URL}
       ENCRYPTION_KEY: ${ENCRYPTION_KEY}
-      APP_ACCESS_TOKEN: ${APP_ACCESS_TOKEN}
+      JWT_SECRET: ${JWT_SECRET}
       REDIS_HOST: redis
       REDIS_PORT: 6379
       NODE_ENV: production

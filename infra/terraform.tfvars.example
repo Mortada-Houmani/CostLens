@@ -14,7 +14,7 @@ backend_desired_count = 1
 
 database_url   = "postgresql://USER:PASSWORD@HOST.neon.tech/DBNAME?sslmode=require&channel_binding=require"
 encryption_key = "replace-with-a-long-random-secret"
-app_access_token = "replace-with-a-long-random-access-token"
+jwt_secret     = "replace-with-a-long-random-jwt-secret"
 
 enable_elasticache    = true
 redis_host            = "localhost"

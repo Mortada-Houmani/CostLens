@@ -27,9 +27,9 @@ export class ScansService {
     private readonly scanQueueService: ScanQueueService,
   ) {}
 
-  async start(awsAccountId: string): Promise<ScanResponse> {
+  async start(userId: string, awsAccountId: string): Promise<ScanResponse> {
     const awsAccount = await this.awsAccountsRepository.findOne({
-      where: { id: awsAccountId },
+      where: { id: awsAccountId, user: { id: userId } },
     });
 
     if (!awsAccount) {
@@ -60,8 +60,9 @@ export class ScansService {
     return this.toResponse(scan, 0);
   }
 
-  async findAll(): Promise<ScanResponse[]> {
+  async findAll(userId: string): Promise<ScanResponse[]> {
     const scans = await this.scansRepository.find({
+      where: { awsAccount: { user: { id: userId } } },
       relations: { findings: true },
       order: { createdAt: 'DESC' },
     });
@@ -71,9 +72,9 @@ export class ScansService {
     );
   }
 
-  async findOne(id: string): Promise<ScanResponse> {
+  async findOne(userId: string, id: string): Promise<ScanResponse> {
     const scan = await this.scansRepository.findOne({
-      where: { id },
+      where: { id, awsAccount: { user: { id: userId } } },
       relations: { findings: true },
     });
 

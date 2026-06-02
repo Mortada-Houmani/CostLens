@@ -1,4 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
+import type { AuthUser } from '../auth/auth-user';
+import { CurrentUser } from '../auth/current-user.decorator';
 import {
   DashboardService,
   DashboardSummaryResponse,
@@ -9,7 +11,7 @@ export class DashboardController {
   constructor(private readonly dashboardService: DashboardService) {}
 
   @Get('summary')
-  getSummary(): Promise<DashboardSummaryResponse> {
-    return this.dashboardService.getSummary();
+  getSummary(@CurrentUser() user: AuthUser): Promise<DashboardSummaryResponse> {
+    return this.dashboardService.getSummary(user.id);
   }
 }

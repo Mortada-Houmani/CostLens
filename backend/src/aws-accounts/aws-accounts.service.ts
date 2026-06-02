@@ -30,9 +30,14 @@ export class AwsAccountsService {
   ) {}
 
   async create(
+    userId: string,
     createAwsAccountDto: CreateAwsAccountDto,
   ): Promise<AwsAccountResponse> {
-    const user = await this.findOrCreateUser(createAwsAccountDto.email);
+    const user = await this.usersRepository.findOne({ where: { id: userId } });
+
+    if (!user) {
+      throw new NotFoundException('The authenticated user was not found.');
+    }
 
     const awsAccount = this.awsAccountsRepository.create({
       accountName: createAwsAccountDto.accountName,
@@ -49,8 +54,9 @@ export class AwsAccountsService {
     return this.toResponse(savedAwsAccount);
   }
 
-  async findAll(): Promise<AwsAccountResponse[]> {
+  async findAll(userId: string): Promise<AwsAccountResponse[]> {
     const awsAccounts = await this.awsAccountsRepository.find({
+      where: { user: { id: userId } },
       relations: { user: true },
       order: { createdAt: 'DESC' },
     });
@@ -58,9 +64,9 @@ export class AwsAccountsService {
     return awsAccounts.map((awsAccount) => this.toResponse(awsAccount));
   }
 
-  async findOne(id: string): Promise<AwsAccountResponse> {
+  async findOne(userId: string, id: string): Promise<AwsAccountResponse> {
     const awsAccount = await this.awsAccountsRepository.findOne({
-      where: { id },
+      where: { id, user: { id: userId } },
       relations: { user: true },
     });
 
@@ -73,9 +79,9 @@ export class AwsAccountsService {
     return this.toResponse(awsAccount);
   }
 
-  async remove(id: string): Promise<void> {
+  async remove(userId: string, id: string): Promise<void> {
     const awsAccount = await this.awsAccountsRepository.findOne({
-      where: { id },
+      where: { id, user: { id: userId } },
     });
 
     if (!awsAccount) {
@@ -85,21 +91,6 @@ export class AwsAccountsService {
     }
 
     await this.awsAccountsRepository.remove(awsAccount);
-  }
-
-  private async findOrCreateUser(email: string): Promise<User> {
-    const normalizedEmail = email.toLowerCase();
-    const existingUser = await this.usersRepository.findOne({
-      where: { email: normalizedEmail },
-    });
-
-    if (existingUser) {
-      return existingUser;
-    }
-
-    const user = this.usersRepository.create({ email: normalizedEmail });
-
-    return this.usersRepository.save(user);
   }
 
   private toResponse(awsAccount: AwsAccount): AwsAccountResponse {

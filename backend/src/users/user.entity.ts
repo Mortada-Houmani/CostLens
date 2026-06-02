@@ -16,6 +16,9 @@ export class User {
   @Column({ unique: true })
   email: string;
 
+  @Column({ select: false, nullable: true })
+  passwordHash: string | null;
+
   @OneToMany(() => AwsAccount, (awsAccount) => awsAccount.user)
   awsAccounts: AwsAccount[];
 

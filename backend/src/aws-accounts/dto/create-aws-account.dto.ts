@@ -1,11 +1,8 @@
-import { IsEmail, IsNotEmpty, IsString, Matches } from 'class-validator';
+import { IsNotEmpty, IsString, Matches } from 'class-validator';
 
 const AWS_REGION_PATTERN = /^[a-z]{2}(?:-[a-z]+)+-\d$/;
 
 export class CreateAwsAccountDto {
-  @IsEmail()
-  email: string;
-
   @IsString()
   @IsNotEmpty()
   accountName: string;
