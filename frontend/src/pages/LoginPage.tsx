@@ -13,11 +13,17 @@ type LocationState = {
 
 interface AuthResponse {
   accessToken: string;
-  user: {
+  user?: {
     id: string;
     email: string;
   };
 }
+
+type MaybeWrappedAuthResponse =
+  | AuthResponse
+  | {
+      data?: AuthResponse;
+    };
 
 export function LoginPage() {
   const [mode, setMode] = useState<'login' | 'register'>('login');
@@ -49,7 +55,13 @@ export function LoginPage() {
         },
       );
 
-      setAccessToken(response.data.accessToken, response.data.user.email);
+      const auth = normalizeAuthResponse(response.data);
+
+      if (!auth.accessToken) {
+        throw new Error('Login response did not include an access token.');
+      }
+
+      setAccessToken(auth.accessToken, auth.user?.email ?? email);
       navigate(destination, { replace: true });
     } catch (authError) {
       setError(getApiErrorMessage(authError));
@@ -65,6 +77,20 @@ export function LoginPage() {
 
     setMode(nextMode);
     setError('');
+  }
+
+  function normalizeAuthResponse(
+    response: MaybeWrappedAuthResponse,
+  ): AuthResponse {
+    if ('accessToken' in response) {
+      return response;
+    }
+
+    if (response.data && 'accessToken' in response.data) {
+      return response.data;
+    }
+
+    throw new Error('Unexpected login response from the API.');
   }
 
   return (
