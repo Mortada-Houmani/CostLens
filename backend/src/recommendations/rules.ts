@@ -10,7 +10,10 @@ export type RecommendationType =
   | 'S3_VERSIONING_DISABLED'
   | 'PUBLIC_RDS_INSTANCE'
   | 'RDS_BACKUPS_DISABLED'
-  | 'RDS_ENCRYPTION_DISABLED';
+  | 'RDS_ENCRYPTION_DISABLED'
+  | 'ECS_SERVICE_PUBLIC_IP_ENABLED'
+  | 'ECS_SERVICE_NOT_STABLE'
+  | 'ECS_SERVICE_RUNNING';
 
 export interface RecommendationContext {
   resourceId?: string;
@@ -105,5 +108,26 @@ export const recommendationRules: Record<
     buildMessage: () => 'RDS storage encryption is disabled',
     buildRecommendation: () =>
       'Enable encryption at rest for database storage.',
+  },
+  ECS_SERVICE_PUBLIC_IP_ENABLED: {
+    type: 'ECS_SERVICE_PUBLIC_IP_ENABLED',
+    severity: 'MEDIUM',
+    buildMessage: () => 'ECS service assigns public IP addresses',
+    buildRecommendation: () =>
+      'Review whether this ECS service needs public IPs. Prefer private subnets behind a load balancer when possible.',
+  },
+  ECS_SERVICE_NOT_STABLE: {
+    type: 'ECS_SERVICE_NOT_STABLE',
+    severity: 'MEDIUM',
+    buildMessage: () => 'ECS service is not at desired capacity',
+    buildRecommendation: () =>
+      'Review service events, task health, and deployment status to confirm the service can reach its desired running count.',
+  },
+  ECS_SERVICE_RUNNING: {
+    type: 'ECS_SERVICE_RUNNING',
+    severity: 'LOW',
+    buildMessage: () => 'ECS service is running tasks',
+    buildRecommendation: () =>
+      'Confirm this ECS service is still needed and sized appropriately for current usage.',
   },
 };

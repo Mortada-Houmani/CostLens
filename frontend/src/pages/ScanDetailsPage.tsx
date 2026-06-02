@@ -5,7 +5,7 @@ import { SeverityBadge } from '../components/SeverityBadge'
 import { formatCurrency, formatDate } from '../utils/format'
 
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH'
-type Service = 'EC2' | 'EBS' | 'S3' | 'RDS'
+type Service = 'EC2' | 'EBS' | 'S3' | 'RDS' | 'ECS'
 
 interface Scan {
   id: string

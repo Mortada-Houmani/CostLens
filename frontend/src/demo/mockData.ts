@@ -208,6 +208,33 @@ export const mockFindings = [
       status: 'success',
     },
   },
+  {
+    id: 'demo-finding-ecs-public-ip',
+    service: 'ECS',
+    resourceId:
+      'arn:aws:ecs:eu-central-1:123456789012:service/costlens-cluster/costlens-backend-service',
+    resourceName: 'costlens-backend-service',
+    region: 'eu-central-1',
+    severity: 'MEDIUM',
+    type: 'ECS_SERVICE_PUBLIC_IP_ENABLED',
+    message: 'ECS service assigns public IP addresses',
+    estimatedMonthlyWaste: '0',
+    recommendation:
+      'Review whether this ECS service needs public IPs. Prefer private subnets behind a load balancer when possible.',
+    fixCommand: null,
+    metadata: {
+      clusterArn:
+        'arn:aws:ecs:eu-central-1:123456789012:cluster/costlens-cluster',
+      runningCount: 1,
+      desiredCount: 1,
+      assignPublicIp: 'ENABLED',
+    },
+    createdAt: hoursAgo(3.2),
+    scan: {
+      id: 'demo-scan-003',
+      status: 'success',
+    },
+  },
 ]
 
 export const mockDashboardSummary = {
@@ -228,6 +255,7 @@ export const mockDashboardSummary = {
     EBS: mockFindings.filter((finding) => finding.service === 'EBS').length,
     S3: mockFindings.filter((finding) => finding.service === 'S3').length,
     RDS: mockFindings.filter((finding) => finding.service === 'RDS').length,
+    ECS: mockFindings.filter((finding) => finding.service === 'ECS').length,
   },
   latestScan: {
     id: mockScans[0].id,

@@ -141,6 +141,7 @@ export class DashboardService {
       [FindingService.EBS]: 0,
       [FindingService.S3]: 0,
       [FindingService.RDS]: 0,
+      [FindingService.ECS]: 0,
     };
 
     for (const row of rows) {

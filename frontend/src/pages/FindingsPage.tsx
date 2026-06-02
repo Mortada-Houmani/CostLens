@@ -6,7 +6,7 @@ import { isDemoMode, mockFindings } from '../demo/mockData'
 import { formatCurrency, formatDate } from '../utils/format'
 
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH'
-type Service = 'EC2' | 'EBS' | 'S3' | 'RDS'
+type Service = 'EC2' | 'EBS' | 'S3' | 'RDS' | 'ECS'
 
 interface Finding {
   id: string
@@ -97,7 +97,7 @@ export function FindingsPage() {
           label="Service"
           value={service}
           onChange={setService}
-          options={['EC2', 'EBS', 'S3', 'RDS']}
+          options={['EC2', 'EBS', 'S3', 'RDS', 'ECS']}
           allLabel="All Services"
         />
         <FilterSelect

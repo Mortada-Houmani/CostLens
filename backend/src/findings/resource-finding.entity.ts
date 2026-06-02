@@ -13,6 +13,7 @@ export enum FindingService {
   EBS = 'EBS',
   S3 = 'S3',
   RDS = 'RDS',
+  ECS = 'ECS',
 }
 
 export enum FindingSeverity {
@@ -29,10 +30,7 @@ export class ResourceFinding {
   @ManyToOne(() => Scan, (scan) => scan.findings, { nullable: false })
   scan: Scan;
 
-  @Column({
-    type: 'enum',
-    enum: FindingService,
-  })
+  @Column({ type: 'varchar' })
   service: FindingService;
 
   @Column()
@@ -44,10 +42,7 @@ export class ResourceFinding {
   @Column()
   region: string;
 
-  @Column({
-    type: 'enum',
-    enum: FindingSeverity,
-  })
+  @Column({ type: 'varchar' })
   severity: FindingSeverity;
 
   @Column()

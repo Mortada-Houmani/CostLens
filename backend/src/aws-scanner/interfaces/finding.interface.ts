@@ -1,4 +1,4 @@
-export type FindingService = 'EC2' | 'EBS' | 'S3' | 'RDS';
+export type FindingService = 'EC2' | 'EBS' | 'S3' | 'RDS' | 'ECS';
 export type FindingSeverity = 'LOW' | 'MEDIUM' | 'HIGH';
 
 export interface Finding {

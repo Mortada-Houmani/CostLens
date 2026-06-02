@@ -7,7 +7,7 @@ import { isDemoMode, mockDashboardSummary } from '../demo/mockData'
 import { formatCurrency } from '../utils/format'
 
 type Severity = 'LOW' | 'MEDIUM' | 'HIGH'
-type Service = 'EC2' | 'EBS' | 'S3' | 'RDS'
+type Service = 'EC2' | 'EBS' | 'S3' | 'RDS' | 'ECS'
 
 interface LatestFinding {
   id: string
@@ -50,7 +50,7 @@ const emptySummary: DashboardSummary = {
   mediumSeverity: 0,
   lowSeverity: 0,
   estimatedMonthlyWaste: 0,
-  findingsByService: { EC2: 0, EBS: 0, S3: 0, RDS: 0 },
+  findingsByService: { EC2: 0, EBS: 0, S3: 0, RDS: 0, ECS: 0 },
   latestScan: null,
   totalScans: 0,
   failedScans: 0,
