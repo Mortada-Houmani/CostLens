@@ -38,7 +38,7 @@ export class ResourceFinding {
   @Column()
   resourceId: string;
 
-  @Column({ nullable: true })
+  @Column({ type: 'varchar', nullable: true })
   resourceName: string | null;
 
   @Column()
