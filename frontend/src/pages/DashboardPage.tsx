@@ -1,5 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
+import {
+  Bar,
+  BarChart,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { apiClient, getApiErrorMessage } from '../api/client'
 import { SeverityBadge } from '../components/SeverityBadge'
 import { StatCard } from '../components/StatCard'
@@ -148,23 +159,73 @@ export function DashboardPage() {
         />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-3">
-        <Panel title="Severity Mix">
-          <div className="space-y-3">
-            <MetricRow label="High" value={summary.highSeverity} tone="danger" />
-            <MetricRow label="Medium" value={summary.mediumSeverity} tone="primary" />
-            <MetricRow label="Low" value={summary.lowSeverity} />
-          </div>
-        </Panel>
-
+      <section className="grid gap-4 lg:grid-cols-2">
         <Panel title="Findings By Service">
-          <div className="space-y-3">
-            {Object.entries(summary.findingsByService).map(([service, count]) => (
-              <MetricRow key={service} label={service} value={count} mono />
-            ))}
+          <div className="h-64">
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart
+                data={toServiceChartData(summary.findingsByService)}
+                margin={{ left: -24, right: 8, top: 8, bottom: 0 }}
+              >
+                <XAxis
+                  dataKey="service"
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#859491', fontSize: 11 }}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  axisLine={false}
+                  tickLine={false}
+                  tick={{ fill: '#859491', fontSize: 11 }}
+                />
+                <Tooltip content={<ChartTooltip />} cursor={{ fill: '#ffffff0a' }} />
+                <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                  {toServiceChartData(summary.findingsByService).map((entry) => (
+                    <Cell key={entry.service} fill={entry.color} />
+                  ))}
+                </Bar>
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </Panel>
 
+        <Panel title="Severity Mix">
+          <div className="grid min-h-64 gap-4 md:grid-cols-[1fr_180px] md:items-center">
+            <div className="h-56">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={toSeverityChartData(summary)}
+                    dataKey="count"
+                    nameKey="severity"
+                    innerRadius={58}
+                    outerRadius={86}
+                    paddingAngle={3}
+                  >
+                    {toSeverityChartData(summary).map((entry) => (
+                      <Cell key={entry.severity} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip content={<ChartTooltip />} />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="space-y-3">
+              {toSeverityChartData(summary).map((entry) => (
+                <MetricRow
+                  key={entry.severity}
+                  label={entry.severity}
+                  value={entry.count}
+                  tone={entry.tone}
+                />
+              ))}
+            </div>
+          </div>
+        </Panel>
+      </section>
+
+      <section className="grid gap-4 lg:grid-cols-2">
         <Panel title="Latest Scan">
           {summary.latestScan ? (
             <div className="space-y-3">
@@ -180,6 +241,14 @@ export function DashboardPage() {
           ) : (
             <EmptyState text="No scans have run yet." compact />
           )}
+        </Panel>
+
+        <Panel title="Scan Totals">
+          <div className="space-y-3">
+            <MetricRow label="Total scans" value={summary.totalScans} />
+            <MetricRow label="Successful scans" value={summary.successfulScans} tone="primary" />
+            <MetricRow label="Failed scans" value={summary.failedScans} tone="danger" />
+          </div>
         </Panel>
       </section>
 
@@ -357,4 +426,67 @@ function DemoBanner({ message }: { message: string }) {
 
 function displayValue(value: number, isLoading: boolean) {
   return isLoading ? 'Loading' : value
+}
+
+function toServiceChartData(findingsByService: Record<Service, number>) {
+  const colors: Record<Service, string> = {
+    EC2: '#46eedd',
+    EBS: '#ffd166',
+    S3: '#8fb7ff',
+    RDS: '#ffb4ab',
+    ECS: '#c7a7ff',
+  }
+
+  return Object.entries(findingsByService).map(([service, count]) => ({
+    service,
+    count,
+    color: colors[service as Service],
+  }))
+}
+
+function toSeverityChartData(summary: DashboardSummary) {
+  return [
+    {
+      severity: 'HIGH',
+      count: summary.highSeverity,
+      color: '#ff6b6b',
+      tone: 'danger' as const,
+    },
+    {
+      severity: 'MEDIUM',
+      count: summary.mediumSeverity,
+      color: '#ffd166',
+      tone: 'primary' as const,
+    },
+    {
+      severity: 'LOW',
+      count: summary.lowSeverity,
+      color: '#b6bbc4',
+      tone: 'default' as const,
+    },
+  ]
+}
+
+function ChartTooltip({
+  active,
+  payload,
+}: {
+  active?: boolean
+  payload?: Array<{ name?: string; value?: number; payload?: { service?: string; severity?: string } }>
+}) {
+  if (!active || !payload?.length) {
+    return null
+  }
+
+  const point = payload[0]
+  const label = point.payload?.service ?? point.payload?.severity ?? point.name
+
+  return (
+    <div className="rounded border border-white/10 bg-[#0b0e14] px-3 py-2 shadow-xl">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#859491]">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-sm text-[#46eedd]">{point.value}</p>
+    </div>
+  )
 }

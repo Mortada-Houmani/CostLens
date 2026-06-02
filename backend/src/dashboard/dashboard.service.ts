@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { Repository, SelectQueryBuilder } from 'typeorm';
 import {
   FindingService,
   FindingSeverity,
@@ -70,6 +70,11 @@ export class DashboardService {
   ) {}
 
   async getSummary(): Promise<DashboardSummaryResponse> {
+    const latestScanEntity = await this.getLatestScanEntity();
+    const latestScan = latestScanEntity
+      ? this.toLatestScanResponse(latestScanEntity)
+      : null;
+
     const [
       totalFindings,
       highSeverity,
@@ -77,29 +82,21 @@ export class DashboardService {
       lowSeverity,
       estimatedMonthlyWaste,
       findingsByService,
-      latestScan,
       totalScans,
       failedScans,
       successfulScans,
       latestFindings,
     ] = await Promise.all([
-      this.findingsRepository.count(),
-      this.findingsRepository.count({
-        where: { severity: FindingSeverity.High },
-      }),
-      this.findingsRepository.count({
-        where: { severity: FindingSeverity.Medium },
-      }),
-      this.findingsRepository.count({
-        where: { severity: FindingSeverity.Low },
-      }),
-      this.getEstimatedMonthlyWaste(),
-      this.getFindingsByService(),
-      this.getLatestScan(),
+      this.countFindingsForScan(latestScanEntity?.id),
+      this.countFindingsForScan(latestScanEntity?.id, FindingSeverity.High),
+      this.countFindingsForScan(latestScanEntity?.id, FindingSeverity.Medium),
+      this.countFindingsForScan(latestScanEntity?.id, FindingSeverity.Low),
+      this.getEstimatedMonthlyWaste(latestScanEntity?.id),
+      this.getFindingsByService(latestScanEntity?.id),
       this.scansRepository.count(),
       this.scansRepository.count({ where: { status: ScanStatus.Failed } }),
       this.scansRepository.count({ where: { status: ScanStatus.Success } }),
-      this.getLatestFindings(),
+      this.getLatestFindings(latestScanEntity?.id),
     ]);
 
     return {
@@ -117,20 +114,42 @@ export class DashboardService {
     };
   }
 
-  private async getEstimatedMonthlyWaste(): Promise<number> {
-    const result = await this.findingsRepository
-      .createQueryBuilder('finding')
+  private async countFindingsForScan(
+    scanId?: string,
+    severity?: FindingSeverity,
+  ): Promise<number> {
+    if (!scanId) {
+      return 0;
+    }
+
+    const query = this.createFindingsForScanQuery(scanId);
+
+    if (severity) {
+      query.andWhere('finding.severity = :severity', { severity });
+    }
+
+    return query.getCount();
+  }
+
+  private async getEstimatedMonthlyWaste(scanId?: string): Promise<number> {
+    if (!scanId) {
+      return 0;
+    }
+
+    const result = await this.createFindingsForScanQuery(scanId)
       .select('COALESCE(SUM(finding.estimatedMonthlyWaste), 0)', 'total')
       .getRawOne<WasteSumResult>();
 
     return Number(result?.total ?? 0);
   }
 
-  private async getFindingsByService(): Promise<
-    Record<FindingService, number>
-  > {
-    const rows = await this.findingsRepository
-      .createQueryBuilder('finding')
+  private async getFindingsByService(
+    scanId?: string,
+  ): Promise<Record<FindingService, number>> {
+    const query = scanId
+      ? this.createFindingsForScanQuery(scanId)
+      : this.findingsRepository.createQueryBuilder('finding');
+    const rows = await query
       .select('finding.service', 'service')
       .addSelect('COUNT(finding.id)', 'count')
       .groupBy('finding.service')
@@ -151,16 +170,14 @@ export class DashboardService {
     return findingsByService;
   }
 
-  private async getLatestScan(): Promise<LatestScanResponse | null> {
-    const scan = await this.scansRepository.findOne({
+  private async getLatestScanEntity(): Promise<Scan | null> {
+    return this.scansRepository.findOne({
       where: {},
       order: { createdAt: 'DESC' },
     });
+  }
 
-    if (!scan) {
-      return null;
-    }
-
+  private toLatestScanResponse(scan: Scan): LatestScanResponse {
     return {
       id: scan.id,
       status: scan.status,
@@ -171,14 +188,30 @@ export class DashboardService {
     };
   }
 
-  private async getLatestFindings(): Promise<LatestFindingResponse[]> {
+  private async getLatestFindings(
+    scanId?: string,
+  ): Promise<LatestFindingResponse[]> {
+    if (!scanId) {
+      return [];
+    }
+
     const findings = await this.findingsRepository.find({
+      where: { scan: { id: scanId } },
       relations: { scan: true },
       order: { createdAt: 'DESC' },
       take: 5,
     });
 
     return findings.map((finding) => this.toLatestFindingResponse(finding));
+  }
+
+  private createFindingsForScanQuery(
+    scanId: string,
+  ): SelectQueryBuilder<ResourceFinding> {
+    return this.findingsRepository
+      .createQueryBuilder('finding')
+      .innerJoin('finding.scan', 'scan')
+      .where('scan.id = :scanId', { scanId });
   }
 
   private toLatestFindingResponse(

@@ -1,7 +1,7 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { FindOptionsWhere, Repository } from 'typeorm';
-import { ScanStatus } from '../scans/scan.entity';
+import { Scan, ScanStatus } from '../scans/scan.entity';
 import { FindFindingsQueryDto } from './dto/find-findings-query.dto';
 import {
   FindingService,
@@ -34,13 +34,16 @@ export class FindingsService {
   constructor(
     @InjectRepository(ResourceFinding)
     private readonly findingsRepository: Repository<ResourceFinding>,
+    @InjectRepository(Scan)
+    private readonly scansRepository: Repository<Scan>,
   ) {}
 
   async findAll(query: FindFindingsQueryDto): Promise<FindingResponse[]> {
     const where: FindOptionsWhere<ResourceFinding> = {};
+    const scanId = query.scanId ?? (await this.getLatestScanId());
 
-    if (query.scanId) {
-      where.scan = { id: query.scanId };
+    if (scanId) {
+      where.scan = { id: scanId };
     }
 
     if (query.service) {
@@ -58,6 +61,16 @@ export class FindingsService {
     });
 
     return findings.map((finding) => this.toResponse(finding));
+  }
+
+  private async getLatestScanId(): Promise<string | undefined> {
+    const scan = await this.scansRepository.findOne({
+      where: {},
+      order: { createdAt: 'DESC' },
+      select: { id: true },
+    });
+
+    return scan?.id;
   }
 
   async findOne(id: string): Promise<FindingResponse> {
