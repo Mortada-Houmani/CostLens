@@ -1,0 +1,24 @@
+project_name = "costlens"
+aws_region   = "eu-central-1"
+
+vpc_cidr             = "10.0.0.0/16"
+public_subnet_cidrs  = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs = ["10.0.101.0/24", "10.0.102.0/24"]
+
+backend_image         = "123456789012.dkr.ecr.eu-central-1.amazonaws.com/costlens-backend:latest"
+node_env              = "production"
+backend_port          = 3000
+backend_cpu           = 256
+backend_memory        = 512
+backend_desired_count = 1
+
+database_url   = "postgresql://USER:PASSWORD@HOST.neon.tech/DBNAME?sslmode=require&channel_binding=require"
+encryption_key = "replace-with-a-long-random-secret"
+
+enable_elasticache    = false
+redis_host            = "localhost"
+redis_port            = 6379
+elasticache_node_type = "cache.t4g.micro"
+
+# S3 bucket names must be globally unique.
+frontend_bucket_name = "costlens-frontend-example"
