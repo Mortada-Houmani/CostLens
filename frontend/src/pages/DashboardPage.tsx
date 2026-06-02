@@ -1,9 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import {
+  Area,
+  AreaChart,
   Bar,
   BarChart,
   Cell,
+  Line,
+  LineChart,
   Pie,
   PieChart,
   ResponsiveContainer,
@@ -69,12 +73,33 @@ const emptySummary: DashboardSummary = {
   latestFindings: [],
 }
 
+const serviceLabels: Record<Service, string> = {
+  EC2: 'EC2 Instances',
+  ECS: 'ECS Services',
+  RDS: 'RDS Databases',
+  S3: 'S3 Buckets',
+  EBS: 'EBS Volumes',
+}
+
 export function DashboardPage() {
   const [summary, setSummary] = useState<DashboardSummary>(
     isDemoMode ? (mockDashboardSummary as DashboardSummary) : emptySummary,
   )
   const [isLoading, setIsLoading] = useState(!isDemoMode)
   const [error, setError] = useState<string | null>(null)
+  const [analyticsService, setAnalyticsService] = useState<Service>('EC2')
+  const [analyticsResource, setAnalyticsResource] = useState('')
+
+  const analyticsResources = getAnalyticsResources(
+    summary.latestFindings,
+    analyticsService,
+  )
+  const selectedAnalyticsResource =
+    analyticsResource || analyticsResources[0]?.id || ''
+  const analyticsSeries = buildTelemetrySeries(
+    analyticsService,
+    selectedAnalyticsResource,
+  )
 
   useEffect(() => {
     if (isDemoMode) {
@@ -95,6 +120,10 @@ export function DashboardPage() {
 
     void loadSummary()
   }, [])
+
+  useEffect(() => {
+    setAnalyticsResource('')
+  }, [analyticsService])
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6 p-4 md:p-6">
@@ -223,6 +252,94 @@ export function DashboardPage() {
             </div>
           </div>
         </Panel>
+      </section>
+
+      <section className="overflow-hidden rounded border border-white/10 bg-[#10131a]">
+        <div className="border-b border-white/10 bg-[#272a31] px-4 py-3">
+          <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#859491]">
+            Resource Analytics
+          </p>
+          <div className="mt-2 flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-[#e1e2eb]">
+                Service telemetry
+              </h2>
+              <p className="mt-1 text-sm text-[#859491]">
+                Sample operational charts for the selected resource.
+              </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row">
+              <select
+                value={selectedAnalyticsResource}
+                onChange={(event) => setAnalyticsResource(event.target.value)}
+                className="h-10 rounded border border-white/10 bg-[#0b0e14] px-3 font-mono text-xs text-[#e1e2eb] outline-none focus:border-[#46eedd] focus:ring-2 focus:ring-[#46eedd]/20 sm:min-w-80"
+              >
+                {analyticsResources.map((resource) => (
+                  <option key={resource.id} value={resource.id}>
+                    {resource.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-b border-white/10 px-4 py-3">
+          <div className="flex gap-2 overflow-x-auto">
+            {(['EC2', 'ECS', 'RDS', 'S3', 'EBS'] as Service[]).map(
+              (service) => (
+                <button
+                  key={service}
+                  type="button"
+                  onClick={() => setAnalyticsService(service)}
+                  className={[
+                    'whitespace-nowrap rounded border px-3 py-2 text-xs font-bold uppercase tracking-[0.12em] transition',
+                    analyticsService === service
+                      ? 'border-[#46eedd]/50 bg-[#00d1c1]/10 text-[#46eedd]'
+                      : 'border-white/10 text-[#859491] hover:border-white/20 hover:text-[#e1e2eb]',
+                  ].join(' ')}
+                >
+                  {service}
+                </button>
+              ),
+            )}
+          </div>
+        </div>
+
+        <div className="grid gap-4 p-4 lg:grid-cols-2">
+          <TelemetryChart
+            title="Monthly Cost"
+            unit="$"
+            dataKey="cost"
+            data={analyticsSeries}
+            color="#46eedd"
+            chartType="area"
+          />
+          <TelemetryChart
+            title="CPU Utilization"
+            unit="%"
+            dataKey="cpu"
+            data={analyticsSeries}
+            color="#ffd166"
+            chartType="line"
+          />
+          <TelemetryChart
+            title="Memory Utilization"
+            unit="%"
+            dataKey="memory"
+            data={analyticsSeries}
+            color="#c7a7ff"
+            chartType="line"
+          />
+          <TelemetryChart
+            title={analyticsService === 'S3' || analyticsService === 'EBS' ? 'Storage Activity' : 'Network Throughput'}
+            unit={analyticsService === 'S3' || analyticsService === 'EBS' ? 'GB' : 'MB/s'}
+            dataKey="network"
+            data={analyticsSeries}
+            color="#8fb7ff"
+            chartType="area"
+          />
+        </div>
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
@@ -424,8 +541,185 @@ function DemoBanner({ message }: { message: string }) {
   )
 }
 
+function TelemetryChart({
+  title,
+  unit,
+  dataKey,
+  data,
+  color,
+  chartType,
+}: {
+  title: string
+  unit: string
+  dataKey: 'cost' | 'cpu' | 'memory' | 'network'
+  data: TelemetryPoint[]
+  color: string
+  chartType: 'line' | 'area'
+}) {
+  return (
+    <div className="rounded border border-white/10 bg-[#1d2026] p-4">
+      <div className="mb-4 flex items-center justify-between gap-4">
+        <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#859491]">
+          {title}
+        </h3>
+        <span className="font-mono text-xs text-[#46eedd]">
+          {formatTelemetryValue(data.at(-1)?.[dataKey] ?? 0, unit)}
+        </span>
+      </div>
+      <div className="h-52">
+        <ResponsiveContainer width="100%" height="100%">
+          {chartType === 'area' ? (
+            <AreaChart data={data} margin={{ left: -24, right: 8, top: 8, bottom: 0 }}>
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#859491', fontSize: 11 }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#859491', fontSize: 11 }}
+              />
+              <Tooltip content={<TelemetryTooltip unit={unit} />} />
+              <Area
+                type="monotone"
+                dataKey={dataKey}
+                stroke={color}
+                fill={color}
+                fillOpacity={0.16}
+                strokeWidth={2}
+              />
+            </AreaChart>
+          ) : (
+            <LineChart data={data} margin={{ left: -24, right: 8, top: 8, bottom: 0 }}>
+              <XAxis
+                dataKey="label"
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#859491', fontSize: 11 }}
+              />
+              <YAxis
+                axisLine={false}
+                tickLine={false}
+                tick={{ fill: '#859491', fontSize: 11 }}
+              />
+              <Tooltip content={<TelemetryTooltip unit={unit} />} />
+              <Line
+                type="monotone"
+                dataKey={dataKey}
+                stroke={color}
+                strokeWidth={2}
+                dot={false}
+                activeDot={{ r: 4 }}
+              />
+            </LineChart>
+          )}
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
 function displayValue(value: number, isLoading: boolean) {
   return isLoading ? 'Loading' : value
+}
+
+interface AnalyticsResource {
+  id: string
+  name: string
+}
+
+interface TelemetryPoint {
+  label: string
+  cost: number
+  cpu: number
+  memory: number
+  network: number
+}
+
+function getAnalyticsResources(
+  findings: LatestFinding[],
+  service: Service,
+): AnalyticsResource[] {
+  const resources = findings
+    .filter((finding) => finding.service === service)
+    .map((finding) => ({
+      id: finding.resourceId,
+      name: finding.resourceName ?? finding.resourceId,
+    }))
+
+  if (resources.length > 0) {
+    return dedupeResources(resources)
+  }
+
+  return [
+    {
+      id: `${service.toLowerCase()}-demo-primary`,
+      name: `${serviceLabels[service]} demo primary`,
+    },
+    {
+      id: `${service.toLowerCase()}-demo-secondary`,
+      name: `${serviceLabels[service]} demo secondary`,
+    },
+  ]
+}
+
+function dedupeResources(resources: AnalyticsResource[]) {
+  const seen = new Set<string>()
+
+  return resources.filter((resource) => {
+    if (seen.has(resource.id)) {
+      return false
+    }
+
+    seen.add(resource.id)
+    return true
+  })
+}
+
+function buildTelemetrySeries(
+  service: Service,
+  resourceId: string,
+): TelemetryPoint[] {
+  const seed = hashString(`${service}:${resourceId}`)
+  const labels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+  const baselines: Record<Service, { cost: number; cpu: number; memory: number; network: number }> = {
+    EC2: { cost: 18, cpu: 42, memory: 58, network: 24 },
+    ECS: { cost: 14, cpu: 36, memory: 64, network: 31 },
+    RDS: { cost: 28, cpu: 31, memory: 72, network: 18 },
+    S3: { cost: 5, cpu: 2, memory: 4, network: 86 },
+    EBS: { cost: 9, cpu: 1, memory: 3, network: 64 },
+  }
+  const baseline = baselines[service]
+
+  return labels.map((label, index) => {
+    const variance = ((seed + index * 17) % 19) - 9
+
+    return {
+      label,
+      cost: roundMetric(baseline.cost + variance * 0.7 + index * 0.9),
+      cpu: clampMetric(baseline.cpu + variance + index * 1.8, 0, 100),
+      memory: clampMetric(baseline.memory + variance * 0.8 + index, 0, 100),
+      network: roundMetric(Math.max(0, baseline.network + variance * 2.4 + index * 3)),
+    }
+  })
+}
+
+function hashString(value: string) {
+  return value.split('').reduce((total, char) => total + char.charCodeAt(0), 0)
+}
+
+function clampMetric(value: number, min: number, max: number) {
+  return roundMetric(Math.min(max, Math.max(min, value)))
+}
+
+function roundMetric(value: number) {
+  return Math.round(value * 10) / 10
+}
+
+function formatTelemetryValue(value: number, unit: string) {
+  return unit === '$' ? formatCurrency(value) : `${value}${unit}`
 }
 
 function toServiceChartData(findingsByService: Record<Service, number>) {
@@ -487,6 +781,35 @@ function ChartTooltip({
         {label}
       </p>
       <p className="mt-1 font-mono text-sm text-[#46eedd]">{point.value}</p>
+    </div>
+  )
+}
+
+function TelemetryTooltip({
+  active,
+  payload,
+  label,
+  unit,
+}: {
+  active?: boolean
+  payload?: Array<{ value?: number; name?: string }>
+  label?: string
+  unit: string
+}) {
+  if (!active || !payload?.length) {
+    return null
+  }
+
+  const point = payload[0]
+
+  return (
+    <div className="rounded border border-white/10 bg-[#0b0e14] px-3 py-2 shadow-xl">
+      <p className="text-[11px] font-bold uppercase tracking-[0.14em] text-[#859491]">
+        {label}
+      </p>
+      <p className="mt-1 font-mono text-sm text-[#46eedd]">
+        {formatTelemetryValue(Number(point.value ?? 0), unit)}
+      </p>
     </div>
   )
 }
