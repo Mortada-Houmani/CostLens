@@ -108,6 +108,14 @@ npm run dev
 
 Set `VITE_DEMO_MODE=false` to use the real API integration again.
 
+For the deployed CloudFront frontend, set the GitHub Secret `VITE_API_URL` to:
+
+```text
+/api
+```
+
+CloudFront forwards `/api/*` to the backend ALB, which avoids browser mixed-content blocking.
+
 ## Backend CI/CD
 
 The backend deployment workflow lives at `.github/workflows/deploy-backend.yml`.
