@@ -82,15 +82,27 @@ export function LoginPage() {
   function normalizeAuthResponse(
     response: MaybeWrappedAuthResponse,
   ): AuthResponse {
+    if (!response || typeof response !== 'object') {
+      throw new Error(
+        'Auth API returned an unexpected response. Check that VITE_API_URL points to /api.',
+      );
+    }
+
     if ('accessToken' in response) {
       return response;
     }
 
-    if (response.data && 'accessToken' in response.data) {
+    if (
+      response.data &&
+      typeof response.data === 'object' &&
+      'accessToken' in response.data
+    ) {
       return response.data;
     }
 
-    throw new Error('Unexpected login response from the API.');
+    throw new Error(
+      'Auth API returned an unexpected response. Check that VITE_API_URL points to /api.',
+    );
   }
 
   return (

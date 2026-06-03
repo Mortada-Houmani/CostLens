@@ -1,8 +1,12 @@
 import axios from 'axios'
 import { clearAccessToken, getAccessToken } from '../auth/accessToken'
 
+const apiBaseUrl =
+  import.meta.env.VITE_API_URL ||
+  (import.meta.env.PROD ? '/api' : 'http://localhost:3000/api')
+
 export const apiClient = axios.create({
-  baseURL: import.meta.env.VITE_API_URL ?? 'http://localhost:3000/api',
+  baseURL: apiBaseUrl,
 })
 
 apiClient.interceptors.request.use((config) => {
