@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AwsAccount } from '../aws-accounts/aws-account.entity';
+import { ScanExecutorService } from '../scan-queue/scan-executor.service';
 import { ScanQueueService } from '../scan-queue/scan-queue.service';
 import { Scan, ScanStatus } from './scan.entity';
 
@@ -25,6 +26,7 @@ export class ScansService {
     @InjectRepository(AwsAccount)
     private readonly awsAccountsRepository: Repository<AwsAccount>,
     private readonly scanQueueService: ScanQueueService,
+    private readonly scanExecutorService: ScanExecutorService,
   ) {}
 
   async start(userId: string, awsAccountId: string): Promise<ScanResponse> {
@@ -50,14 +52,25 @@ export class ScansService {
       }),
     );
 
-    await this.scanQueueService.addScanJob({
-      scanId: scan.id,
-      awsAccountId,
+    if (this.scanQueueService.isEnabled()) {
+      await this.scanQueueService.addScanJob({
+        scanId: scan.id,
+        awsAccountId,
+      });
+      this.logger.log(`Queued scan ${scan.id} for AWS account ${awsAccountId}`);
+    } else {
+      this.logger.warn(
+        `Scan queue disabled; running scan ${scan.id} synchronously`,
+      );
+      await this.scanExecutorService.execute(scan.id, awsAccountId);
+    }
+
+    const savedScan = await this.scansRepository.findOne({
+      where: { id: scan.id },
+      relations: { findings: true },
     });
 
-    this.logger.log(`Queued scan ${scan.id} for AWS account ${awsAccountId}`);
-
-    return this.toResponse(scan, 0);
+    return this.toResponse(savedScan ?? scan, savedScan?.findings?.length ?? 0);
   }
 
   async findAll(userId: string): Promise<ScanResponse[]> {
