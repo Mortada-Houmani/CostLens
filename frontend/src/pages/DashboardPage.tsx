@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react'
+import { Component, useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import {
   Area,
@@ -165,8 +166,10 @@ export function DashboardPage() {
             params: { service: analyticsService },
           },
         )
-        setLiveAnalyticsResources(response.data)
-        setAnalyticsResource(response.data[0]?.id ?? '')
+        const resources = normalizeAnalyticsResources(response.data)
+        setLiveAnalyticsResources(resources)
+        setAnalyticsResource(resources[0]?.id ?? '')
+        setLiveAnalyticsSeries([])
       } catch (loadError) {
         setLiveAnalyticsResources([])
         setLiveAnalyticsSeries([])
@@ -180,9 +183,16 @@ export function DashboardPage() {
   }, [analyticsService])
 
   useEffect(() => {
-    if (isDemoMode || !selectedAnalyticsResource) {
+    if (isDemoMode) {
       return
     }
+
+    if (!selectedAnalyticsResource) {
+      setLiveAnalyticsSeries([])
+      return
+    }
+
+    let isCurrentRequest = true
 
     async function loadMetrics() {
       setAnalyticsError(null)
@@ -199,16 +209,30 @@ export function DashboardPage() {
             },
           },
         )
-        setLiveAnalyticsSeries(response.data.points)
+        if (!isCurrentRequest) {
+          return
+        }
+
+        setLiveAnalyticsSeries(normalizeTelemetryPoints(response.data?.points))
       } catch (loadError) {
+        if (!isCurrentRequest) {
+          return
+        }
+
         setLiveAnalyticsSeries([])
         setAnalyticsError(getApiErrorMessage(loadError))
       } finally {
-        setIsAnalyticsLoading(false)
+        if (isCurrentRequest) {
+          setIsAnalyticsLoading(false)
+        }
       }
     }
 
     void loadMetrics()
+
+    return () => {
+      isCurrentRequest = false
+    }
   }, [analyticsRange, analyticsService, selectedAnalyticsResource])
 
   return (
@@ -675,81 +699,130 @@ function TelemetryChart({
   chartType: 'line' | 'area'
   loading: boolean
 }) {
-  const latestValue = [...data]
+  const chartData = normalizeTelemetryPoints(data)
+  const hasMetricData = chartData.some((point) => point[dataKey] !== null)
+  const latestValue = [...chartData]
     .reverse()
     .find((point) => point[dataKey] !== null)?.[dataKey]
 
   return (
-    <div className="rounded border border-white/10 bg-[#1d2026] p-4">
-      <div className="mb-4 flex items-center justify-between gap-4">
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#859491]">
-          {title}
-        </h3>
-        <span className="font-mono text-xs text-[#46eedd]">
-          {loading ? 'Loading' : formatTelemetryValue(latestValue, unit)}
-        </span>
-      </div>
-      <div className="h-52">
-        {loading ? (
-          <div className="h-full animate-pulse rounded border border-white/5 bg-white/[0.04]" />
-        ) : data.length === 0 ? (
-          <div className="flex h-full items-center justify-center rounded border border-white/5 bg-[#0b0e14] px-4 text-center text-sm text-[#859491]">
-            No CloudWatch datapoints found for this metric.
-          </div>
-        ) : (
-        <ResponsiveContainer width="100%" height="100%">
-          {chartType === 'area' ? (
-            <AreaChart data={data} margin={{ left: -24, right: 8, top: 8, bottom: 0 }}>
-              <XAxis
-                dataKey="label"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: '#859491', fontSize: 11 }}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: '#859491', fontSize: 11 }}
-              />
-              <Tooltip content={<TelemetryTooltip unit={unit} />} />
-              <Area
-                type="monotone"
-                dataKey={dataKey}
-                stroke={color}
-                fill={color}
-                fillOpacity={0.16}
-                strokeWidth={2}
-              />
-            </AreaChart>
+    <TelemetryChartBoundary chartTitle={title}>
+      <div className="rounded border border-white/10 bg-[#1d2026] p-4">
+        <div className="mb-4 flex items-center justify-between gap-4">
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#859491]">
+            {title}
+          </h3>
+          <span className="font-mono text-xs text-[#46eedd]">
+            {loading ? 'Loading' : formatTelemetryValue(latestValue, unit)}
+          </span>
+        </div>
+        <div className="h-52">
+          {loading ? (
+            <div className="h-full animate-pulse rounded border border-white/5 bg-white/[0.04]" />
+          ) : !hasMetricData ? (
+            <div className="flex h-full items-center justify-center rounded border border-white/5 bg-[#0b0e14] px-4 text-center text-sm text-[#859491]">
+              No CloudWatch datapoints found for this metric.
+            </div>
           ) : (
-            <LineChart data={data} margin={{ left: -24, right: 8, top: 8, bottom: 0 }}>
-              <XAxis
-                dataKey="label"
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: '#859491', fontSize: 11 }}
-              />
-              <YAxis
-                axisLine={false}
-                tickLine={false}
-                tick={{ fill: '#859491', fontSize: 11 }}
-              />
-              <Tooltip content={<TelemetryTooltip unit={unit} />} />
-              <Line
-                type="monotone"
-                dataKey={dataKey}
-                stroke={color}
-                strokeWidth={2}
-                dot={false}
-                activeDot={{ r: 4 }}
-              />
-            </LineChart>
+            <ResponsiveContainer width="100%" height="100%">
+              {chartType === 'area' ? (
+                <AreaChart
+                  data={chartData}
+                  margin={{ left: -24, right: 8, top: 8, bottom: 0 }}
+                >
+                  <XAxis
+                    dataKey="label"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#859491', fontSize: 11 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#859491', fontSize: 11 }}
+                  />
+                  <Tooltip content={<TelemetryTooltip unit={unit} />} />
+                  <Area
+                    type="monotone"
+                    dataKey={dataKey}
+                    stroke={color}
+                    fill={color}
+                    fillOpacity={0.16}
+                    strokeWidth={2}
+                    connectNulls
+                  />
+                </AreaChart>
+              ) : (
+                <LineChart
+                  data={chartData}
+                  margin={{ left: -24, right: 8, top: 8, bottom: 0 }}
+                >
+                  <XAxis
+                    dataKey="label"
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#859491', fontSize: 11 }}
+                  />
+                  <YAxis
+                    axisLine={false}
+                    tickLine={false}
+                    tick={{ fill: '#859491', fontSize: 11 }}
+                  />
+                  <Tooltip content={<TelemetryTooltip unit={unit} />} />
+                  <Line
+                    type="monotone"
+                    dataKey={dataKey}
+                    stroke={color}
+                    strokeWidth={2}
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                    connectNulls
+                  />
+                </LineChart>
+              )}
+            </ResponsiveContainer>
           )}
-        </ResponsiveContainer>
-        )}
+        </div>
       </div>
-    </div>
+    </TelemetryChartBoundary>
   )
+}
+
+class TelemetryChartBoundary extends Component<
+  { children: ReactNode; chartTitle: string },
+  { hasError: boolean }
+> {
+  state = { hasError: false }
+
+  static getDerivedStateFromError() {
+    return { hasError: true }
+  }
+
+  componentDidUpdate(previousProps: { chartTitle: string }) {
+    if (
+      this.state.hasError &&
+      previousProps.chartTitle !== this.props.chartTitle
+    ) {
+      this.setState({ hasError: false })
+    }
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="rounded border border-[#ffb4ab]/30 bg-[#1d2026] p-4">
+          <h3 className="text-[11px] font-bold uppercase tracking-[0.16em] text-[#859491]">
+            {this.props.chartTitle}
+          </h3>
+          <div className="mt-4 flex h-52 items-center justify-center rounded border border-[#ffb4ab]/20 bg-[#93000a]/20 px-4 text-center text-sm text-[#ffdad6]">
+            Chart data could not be rendered for this metric.
+          </div>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
 }
 
 function displayValue(value: number, isLoading: boolean) {
@@ -767,6 +840,56 @@ interface TelemetryPoint {
   cpu: number | null
   memory: number | null
   network: number | null
+}
+
+function normalizeAnalyticsResources(
+  resources: unknown,
+): AnalyticsResource[] {
+  if (!Array.isArray(resources)) {
+    return []
+  }
+
+  return dedupeResources(
+    resources
+      .filter((resource): resource is Partial<AnalyticsResource> => {
+        return Boolean(resource && typeof resource === 'object')
+      })
+      .map((resource) => ({
+        id: String(resource.id ?? ''),
+        name: String(resource.name ?? resource.id ?? 'Unnamed resource'),
+        service: (resource.service ?? 'EC2') as Service,
+      }))
+      .filter((resource) => resource.id.length > 0),
+  )
+}
+
+function normalizeTelemetryPoints(points: unknown): TelemetryPoint[] {
+  if (!Array.isArray(points)) {
+    return []
+  }
+
+  return points
+    .filter((point): point is Partial<TelemetryPoint> => {
+      return Boolean(point && typeof point === 'object')
+    })
+    .map((point) => ({
+      label: String(point.label ?? ''),
+      cost: toFiniteMetric(point.cost),
+      cpu: toFiniteMetric(point.cpu),
+      memory: toFiniteMetric(point.memory),
+      network: toFiniteMetric(point.network),
+    }))
+    .filter((point) => point.label.length > 0)
+}
+
+function toFiniteMetric(value: unknown): number | null {
+  if (value === null || value === undefined || value === '') {
+    return null
+  }
+
+  const numericValue = Number(value)
+
+  return Number.isFinite(numericValue) ? numericValue : null
 }
 
 function getAnalyticsResources(
@@ -853,7 +976,7 @@ function roundMetric(value: number) {
 }
 
 function formatTelemetryValue(value: number | null | undefined, unit: string) {
-  if (value === null || value === undefined) {
+  if (value === null || value === undefined || !Number.isFinite(value)) {
     return 'No data'
   }
 
