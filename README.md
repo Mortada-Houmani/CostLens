@@ -157,6 +157,8 @@ ECS_TASK_DEFINITION
 JWT_SECRET
 ```
 
+Generate `JWT_SECRET` with `openssl rand -hex 32`. If it is missing or empty, the ECS task exits during startup and the deploy job waits for the service to stabilize.
+
 The ECS task definition must include a container named `costlens-backend`. The backend container listens on port `3000`.
 
 Every qualifying push to `main` builds a new backend Docker image, pushes it to ECR, and deploys it to ECS. The workflow does not delete old ECR images.
